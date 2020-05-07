@@ -45,42 +45,46 @@ class ILOMetrics(Resource):
         port = int(request.args[b"port"][0])
         username = (request.args[b"username"][0]).decode("utf-8")
         password = (request.args[b"password"][0]).decode("utf-8")
+        logger.info(f"Initializing ILO with : {hostname} {port} {username} {password}")
         ilo_client = Ilo(
             hostname=hostname, port=port, login=username, password=password
         )
-        logger.info(f"Initializing ILO with : {hostname} {port} {username} {password}")
-        power_status = ilo_client.get_host_power_saver_status()["host_power_saver"]
-        logger.debug(f"Powered on Status: {power_status}")
-        server_health = ilo_client.get_embedded_health()
-        present_power_reading_str = server_health["power_supply_summary"][
-            "present_power_reading"
-        ]
-        logger.debug(f"Present power usage : {present_power_reading_str}")
-        power_mode = server_health["power_supply_summary"]["high_efficiency_mode"]
-        logger.debug(f"Power mode : {power_mode}")
-        present_power_reading = present_power_reading_str.replace("Watts", "").strip()
-        present_power_reading_gauge.labels(power_mode, power_status).set(
-            present_power_reading
-        )
-        for (fan_name, fan_status) in server_health["fans"].items():
-            logger.debug(f"Fan name : {fan_name} , data: {fan_status}")
-            fan_speed_percentage = fan_status["speed"][0]
-            fan_gauge.labels(fan_name).set(fan_speed_percentage)
-        for (label, temperature_data) in server_health["temperature"].items():
-            logger.debug(f"Temperature Label : {label} , data: {temperature_data}")
-            location = temperature_data["location"]
-            currentreading = temperature_data["currentreading"]
-            caution = temperature_data["caution"]
-            critical = temperature_data["critical"]
-            if currentreading != "N/A":
-                current_temperature_gauge.labels(location).set(currentreading[0])
-            if caution != "N/A":
-                caution_temperature_gauge.labels(location).set(caution[0])
-            if critical != "N/A":
-                critical_temperature_gauge.labels(location).set(critical[0])
-        logger.info("Request processing finished")
-        return MetricsResource().render_GET(request)
-
+        # ILO was reporting stale metrics when the server turns off. Doing this to prevent that.
+        if ilo_client.get_host_power_status() != "OFF":
+            power_status = ilo_client.get_host_power_saver_status()["host_power_saver"]
+            logger.debug(f"Powered on Status: {power_status}")
+            server_health = ilo_client.get_embedded_health()
+            present_power_reading_str = server_health["power_supply_summary"][
+                "present_power_reading"
+            ]
+            logger.debug(f"Present power usage : {present_power_reading_str}")
+            power_mode = server_health["power_supply_summary"]["high_efficiency_mode"]
+            logger.debug(f"Power mode : {power_mode}")
+            present_power_reading = present_power_reading_str.replace("Watts", "").strip()
+            present_power_reading_gauge.labels(power_mode, power_status).set(
+                present_power_reading
+            )
+            for (fan_name, fan_status) in server_health["fans"].items():
+                logger.debug(f"Fan name : {fan_name} , data: {fan_status}")
+                fan_speed_percentage = fan_status["speed"][0]
+                fan_gauge.labels(fan_name).set(fan_speed_percentage)
+            for (label, temperature_data) in server_health["temperature"].items():
+                logger.debug(f"Temperature Label : {label} , data: {temperature_data}")
+                location = temperature_data["location"]
+                currentreading = temperature_data["currentreading"]
+                caution = temperature_data["caution"]
+                critical = temperature_data["critical"]
+                if currentreading != "N/A":
+                    current_temperature_gauge.labels(location).set(currentreading[0])
+                if caution != "N/A":
+                    caution_temperature_gauge.labels(location).set(caution[0])
+                if critical != "N/A":
+                    critical_temperature_gauge.labels(location).set(critical[0])
+            logger.info("Request processing finished")
+            return MetricsResource().render_GET(request)
+        else:
+            request.setResponseCode(500)
+            return "Internal Server Error"
 
 if __name__ == "__main__":
     root.putChild(b"metrics", ILOMetrics())
