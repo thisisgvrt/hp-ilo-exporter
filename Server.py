@@ -83,6 +83,11 @@ class ILOMetrics(Resource):
             logger.info("Request processing finished")
             return MetricsResource().render_GET(request)
         else:
+            present_power_reading_gauge._metrics.clear()
+            fan_gauge._metrics.clear()
+            current_temperature_gauge._metrics.clear()
+            critical_temperature_gauge._metrics.clear()
+            caution_temperature_gauge._metrics.clear()
             request.setResponseCode(500)
             return "Internal Server Error"
 
