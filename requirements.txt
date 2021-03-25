@@ -7,7 +7,7 @@ incremental==17.5.0
 prometheus-client==0.7.1
 PyHamcrest==2.0.2
 python-hpilo==4.3
-PyYAML==5.3.1
+PyYAML==5.4
 six==1.14.0
 Twisted==20.3.0
 zope.interface==5.1.0
